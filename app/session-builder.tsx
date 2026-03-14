@@ -62,6 +62,8 @@ export default function SessionBuilderScreen() {
   };
 
   const axialNote = activeSession.axialNote;
+  const overreachNote = activeSession.overreachNote;
+  const isOverreach = activeSession.mode === 'overreach' || activeSession.mode === 'complete';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -86,8 +88,23 @@ export default function SessionBuilderScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Overreach / complete week banner */}
+        {isOverreach && overreachNote && (
+          <View style={[styles.axialNote, styles.overreachBanner]}>
+            <Text style={styles.axialNoteIcon}>
+              {activeSession.mode === 'complete' ? '🏆' : '⚡'}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overreachTitle}>
+                {activeSession.mode === 'complete' ? 'Week Complete' : 'Almost There'}
+              </Text>
+              <Text style={styles.axialNoteText}>{overreachNote}</Text>
+            </View>
+          </View>
+        )}
+
         {/* Axial note */}
-        {axialNote && (
+        {axialNote && !isOverreach && (
           <View style={styles.axialNote}>
             <Text style={styles.axialNoteIcon}>🛡</Text>
             <Text style={styles.axialNoteText}>{axialNote}</Text>
@@ -275,6 +292,18 @@ const styles = StyleSheet.create({
     color: COLOURS.textSecondary,
     fontSize: FONT.sm,
     fontWeight: '600',
+  },
+  overreachBanner: {
+    borderWidth: 1,
+    borderColor: COLOURS.gradeA + '55',
+    backgroundColor: COLOURS.gradeA + '12',
+    alignItems: 'flex-start',
+  },
+  overreachTitle: {
+    color: COLOURS.gradeA,
+    fontSize: FONT.md,
+    fontWeight: '800',
+    marginBottom: 2,
   },
   exerciseList: { gap: SPACING.md, marginBottom: SPACING.xl },
   exCard: {
