@@ -8,7 +8,7 @@ import {
   SafeAreaView,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { useWorkoutStore } from '../src/store/workoutStore';
 import { COLOURS, FONT, RADIUS, SPACING, categoryColour, gradeAccent } from '../src/theme';
 import { NudgeCard } from '../src/components/NudgeCard';
@@ -37,16 +37,18 @@ export default function ActiveSessionScreen() {
   const [localVariants, setLocalVariants] = useState<Record<string, string>>({});
 
   if (!activeSession) {
-    router.replace('/(tabs)');
-    return null;
+    return <Redirect href="/(tabs)" />;
   }
 
   const getSets = (ex: string, def: number) => localSets[ex] ?? def;
   const getVariant = (ex: string, def: string) => localVariants[ex] ?? def;
 
+  const prescribedCompletedCount = activeSession.exercises.filter(
+    (ex) => !!sessionProgress[ex.exercise],
+  ).length;
   const completedCount = Object.values(sessionProgress).filter(Boolean).length;
   const totalCount = activeSession.exercises.length;
-  const allDone = completedCount === totalCount;
+  const allDone = prescribedCompletedCount >= totalCount || completedCount >= totalCount;
 
   const handleLog = (exercise: string, variant: string, sets: number) => {
     logWorkout(exercise, variant, sets);
