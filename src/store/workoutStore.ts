@@ -210,15 +210,20 @@ export const useWorkoutStore = create<WorkoutStore>()(
           }
         }
 
-        // Check finish week (only at session completion)
-        let finishWeekPayload: FinishWeekPayload | null = null;
-        if (sessionCompleted) {
-          finishWeekPayload = checkFinishWeek(
+        // Check finish week:
+        // - If the session just completed, run a fresh check
+        // - If the card is already showing (user is logging finishers), re-evaluate
+        //   so the card updates its remaining counts but stays visible
+        // - Otherwise null (card not shown mid-session)
+        let finishWeekPayload: FinishWeekPayload | null = state.finishWeekPayload;
+        if (sessionCompleted || state.finishWeekPayload?.shouldShow) {
+          const freshPayload = checkFinishWeek(
             newHistory,
             getWeekStart(new Date()),
             state.weekTarget,
           );
-          if (!finishWeekPayload.shouldShow) finishWeekPayload = null;
+          // Keep the card open as long as there is still something to finish
+          finishWeekPayload = freshPayload.shouldShow ? freshPayload : null;
         }
 
         // Update personal bests
@@ -252,8 +257,12 @@ export const useWorkoutStore = create<WorkoutStore>()(
       },
 
       logQuickFinisher: (exercise, variant, sets) => {
+        // Log the workout — this will re-evaluate finishWeekPayload inside logWorkout
+        // (sessionCompleted will be false here since this is a finisher, not a main exercise)
+        // We only clear nudgeSuggestions; finishWeekPayload is managed by the UI
+        // so the card stays open until all finishers are logged or user dismisses.
         get().logWorkout(exercise, variant, sets);
-        set({ nudgeSuggestions: [], finishWeekPayload: null });
+        set({ nudgeSuggestions: [] });
       },
 
       dismissNudge: () => set({ nudgeSuggestions: [], nudgeShownThisSession: true }),

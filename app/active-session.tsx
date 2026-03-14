@@ -129,11 +129,11 @@ export default function ActiveSessionScreen() {
             <View style={styles.finishWeekHeader}>
               <Text style={styles.finishWeekIcon}>🏁</Text>
               <View style={styles.finishWeekHeaderText}>
-                <Text style={styles.finishWeekTitle}>Finish the Week?</Text>
+                <Text style={styles.finishWeekTitle}>Finish the Week</Text>
                 <Text style={styles.finishWeekSub}>
                   {finishWeekPayload.incompleteMuscles} muscle
-                  {finishWeekPayload.incompleteMuscles !== 1 ? 's' : ''} within{' '}
-                  {finishWeekPayload.totalSetsNeeded.toFixed(1)} sets of target
+                  {finishWeekPayload.incompleteMuscles !== 1 ? 's' : ''} still to go
+                  {' '}· {finishWeekPayload.totalSetsNeeded.toFixed(1)} sets total
                 </Text>
               </View>
               <TouchableOpacity onPress={dismissFinishWeek} style={styles.dismissBtn}>
@@ -142,23 +142,44 @@ export default function ActiveSessionScreen() {
             </View>
             {finishWeekPayload.suggestions.map((s) => (
               <View key={s.muscle} style={styles.finishSuggestion}>
-                <Text style={styles.finishMuscle}>{s.muscle}</Text>
-                <Text style={styles.finishRemaining}>
-                  {s.remaining.toFixed(1)} sets needed
-                </Text>
-                {s.exercises.slice(0, 1).map((ex) => (
-                  <TouchableOpacity
-                    key={ex.exercise}
-                    style={[styles.finishLogBtn, { backgroundColor: accentColour }]}
-                    onPress={() => logQuickFinisher(ex.exercise, ex.variants[0], Math.ceil(s.remaining))}
-                  >
-                    <Text style={styles.finishLogBtnText}>
-                      {ex.exercise} — {Math.ceil(s.remaining)} sets
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <View style={styles.finishSuggestionHeader}>
+                  <Text style={styles.finishMuscle}>
+                    {s.muscle.replace(/([A-Z])/g, ' $1').trim()}
+                  </Text>
+                  <Text style={styles.finishRemaining}>
+                    {s.remaining.toFixed(1)} sets
+                  </Text>
+                </View>
+                <View style={styles.finishBtnRow}>
+                  {s.exercises.slice(0, 2).map((ex) => (
+                    <TouchableOpacity
+                      key={ex.exercise}
+                      style={[styles.finishLogBtn, { borderColor: accentColour }]}
+                      onPress={() =>
+                        logQuickFinisher(
+                          ex.exercise,
+                          ex.variants[0],
+                          Math.ceil(s.remaining),
+                        )
+                      }
+                    >
+                      <Text style={[styles.finishLogBtnText, { color: accentColour }]}>
+                        {ex.exercise}
+                      </Text>
+                      <Text style={styles.finishLogBtnSets}>
+                        {Math.ceil(s.remaining)} sets
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             ))}
+            <TouchableOpacity
+              style={styles.finishSkipBtn}
+              onPress={dismissFinishWeek}
+            >
+              <Text style={styles.finishSkipText}>Skip — I'm done for today</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -368,6 +389,11 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     gap: SPACING.xs,
   },
+  finishSuggestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   finishMuscle: {
     color: COLOURS.textPrimary,
     fontSize: FONT.md,
@@ -375,13 +401,40 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   finishRemaining: { color: COLOURS.textSecondary, fontSize: FONT.sm },
+  finishBtnRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+    flexWrap: 'wrap',
+  },
   finishLogBtn: {
     borderRadius: RADIUS.md,
-    padding: SPACING.sm,
+    borderWidth: 1.5,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 120,
+  },
+  finishLogBtnText: { fontSize: FONT.sm, fontWeight: '800' },
+  finishLogBtnSets: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.xs,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  finishSkipBtn: {
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+    paddingTop: SPACING.sm,
     alignItems: 'center',
     marginTop: SPACING.xs,
   },
-  finishLogBtnText: { color: '#000', fontSize: FONT.sm, fontWeight: '800' },
+  finishSkipText: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.sm,
+    fontWeight: '600',
+  },
   exerciseList: { gap: SPACING.md },
   exCard: {
     backgroundColor: COLOURS.surface,
