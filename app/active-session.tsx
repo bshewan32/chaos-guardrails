@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,234 @@ import { useWorkoutStore } from '../src/store/workoutStore';
 import { COLOURS, FONT, RADIUS, SPACING, categoryColour, gradeAccent } from '../src/theme';
 import { NudgeCard } from '../src/components/NudgeCard';
 import { exerciseLibrary } from '../src/data/exercises';
+import { FinishWeekPayload } from '../src/engine/finishWeek';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-contained FinishWeekCard
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * FinishWeekCard — self-contained.
+ *
+ * Receives the initial payload from the store once (via useRef snapshot).
+ * Tracks which muscles have been logged in local state. The card stays open
+ * until every suggestion is logged OR the user explicitly dismisses it.
+ * The store's finishWeekPayload is only used to decide whether to mount the
+ * card — once mounted it is fully independent of store re-renders.
+ */
+function FinishWeekCard({
+  payload,
+  accentColour,
+  onLog,
+  onDismiss,
+}: {
+  payload: FinishWeekPayload;
+  accentColour: string;
+  onLog: (exercise: string, variant: string, sets: number) => void;
+  onDismiss: () => void;
+}) {
+  // Snapshot suggestions at mount time — never re-read from store
+  const initialSuggestions = useRef(payload.suggestions).current;
+  const [loggedMuscles, setLoggedMuscles] = useState<Set<string>>(new Set());
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+
+  const remaining = initialSuggestions.filter((s) => !loggedMuscles.has(s.muscle));
+  const allLogged = remaining.length === 0;
+
+  const handleLog = (muscle: string, exercise: string, variant: string, sets: number) => {
+    onLog(exercise, variant, sets);
+    setLoggedMuscles((prev) => new Set([...prev, muscle]));
+  };
+
+  if (allLogged) {
+    setTimeout(onDismiss, 800);
+    return (
+      <View style={[fwStyles.card, { borderColor: accentColour }]}>
+        <View style={fwStyles.allDoneRow}>
+          <Text style={fwStyles.allDoneText}>Week finished! 🏁</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[fwStyles.card, { borderColor: accentColour }]}>
+      {/* Header */}
+      <View style={fwStyles.header}>
+        <Text style={fwStyles.icon}>🏁</Text>
+        <View style={fwStyles.headerText}>
+          <Text style={fwStyles.title}>Finish the Week</Text>
+          <Text style={fwStyles.subtitle}>
+            {remaining.length} muscle group{remaining.length !== 1 ? 's' : ''} still to go
+          </Text>
+        </View>
+        <TouchableOpacity onPress={onDismiss} style={fwStyles.dismissBtn}>
+          <Text style={fwStyles.dismissText}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* All suggestions — logged ones greyed with checkmark */}
+      {initialSuggestions.map((s) => {
+        const isLogged = loggedMuscles.has(s.muscle);
+
+        return (
+          <View
+            key={s.muscle}
+            style={[fwStyles.suggestion, isLogged && fwStyles.suggestionDone]}
+          >
+            <View style={fwStyles.suggestionHeader}>
+              <Text style={[fwStyles.muscleName, isLogged && fwStyles.muscleNameDone]}>
+                {isLogged ? '✓ ' : ''}{s.muscle.replace(/([A-Z])/g, ' $1').trim()}
+              </Text>
+              {!isLogged && (
+                <Text style={fwStyles.remaining}>
+                  {s.remaining.toFixed(1)} sets
+                </Text>
+              )}
+            </View>
+
+            {!isLogged && (
+              <View style={fwStyles.btnRow}>
+                {s.exercises.slice(0, 2).map((ex) => {
+                  const key = `${s.muscle}-${ex.exercise}`;
+                  const variant = selectedVariants[key] ?? ex.variants[0];
+                  return (
+                    <TouchableOpacity
+                      key={ex.exercise}
+                      style={[fwStyles.logBtn, { borderColor: accentColour }]}
+                      onPress={() =>
+                        handleLog(s.muscle, ex.exercise, variant, Math.ceil(s.remaining))
+                      }
+                    >
+                      <Text style={[fwStyles.logBtnName, { color: accentColour }]}>
+                        {ex.exercise}
+                      </Text>
+                      <Text style={fwStyles.logBtnSets}>
+                        {Math.ceil(s.remaining)} sets
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        );
+      })}
+
+      <TouchableOpacity style={fwStyles.skipBtn} onPress={onDismiss}>
+        <Text style={fwStyles.skipText}>Skip — I'm done for today</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const fwStyles = StyleSheet.create({
+  card: {
+    backgroundColor: COLOURS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: COLOURS.surfaceHigh,
+  },
+  icon: { fontSize: 22 },
+  headerText: { flex: 1 },
+  title: {
+    color: COLOURS.textPrimary,
+    fontSize: FONT.md,
+    fontWeight: '800',
+  },
+  subtitle: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.xs,
+  },
+  dismissBtn: { padding: SPACING.xs },
+  dismissText: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.lg,
+    fontWeight: '700',
+  },
+  suggestion: {
+    padding: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+    gap: SPACING.sm,
+  },
+  suggestionDone: { opacity: 0.4 },
+  suggestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  muscleName: {
+    color: COLOURS.textPrimary,
+    fontSize: FONT.md,
+    fontWeight: '700',
+  },
+  muscleNameDone: {
+    color: COLOURS.ringDone,
+    textDecorationLine: 'line-through',
+  },
+  remaining: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.sm,
+    fontWeight: '600',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    flexWrap: 'wrap',
+  },
+  logBtn: {
+    flex: 1,
+    minWidth: 120,
+    borderWidth: 1.5,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+  },
+  logBtnName: {
+    fontSize: FONT.sm,
+    fontWeight: '800',
+  },
+  logBtnSets: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.xs,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  skipBtn: {
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+    padding: SPACING.sm,
+    alignItems: 'center',
+  },
+  skipText: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.sm,
+    fontWeight: '600',
+  },
+  allDoneRow: {
+    padding: SPACING.md,
+    alignItems: 'center',
+  },
+  allDoneText: {
+    color: COLOURS.ringDone,
+    fontSize: FONT.md,
+    fontWeight: '800',
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Active Session Screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ActiveSessionScreen() {
   const router = useRouter();
@@ -21,7 +249,6 @@ export default function ActiveSessionScreen() {
     sessionProgress,
     nudgeSuggestions,
     finishWeekPayload,
-    weekTarget,
     getWeekGrade,
     logWorkout,
     logQuickFinisher,
@@ -107,14 +334,14 @@ export default function ActiveSessionScreen() {
             style={[
               styles.progressBarFill,
               {
-                width: `${(completedCount / totalCount) * 100}%` as any,
+                width: `${Math.min(100, (completedCount / totalCount) * 100)}%` as any,
                 backgroundColor: accentColour,
               },
             ]}
           />
         </View>
 
-        {/* Nudge card */}
+        {/* Nudge card — self-contained, only mounts when suggestions arrive */}
         {nudgeSuggestions.length > 0 && (
           <NudgeCard
             suggestions={nudgeSuggestions}
@@ -123,64 +350,14 @@ export default function ActiveSessionScreen() {
           />
         )}
 
-        {/* Finish week card */}
+        {/* Finish week card — self-contained, only mounts at session completion */}
         {finishWeekPayload?.shouldShow && (
-          <View style={[styles.finishWeekCard, { borderColor: accentColour }]}>
-            <View style={styles.finishWeekHeader}>
-              <Text style={styles.finishWeekIcon}>🏁</Text>
-              <View style={styles.finishWeekHeaderText}>
-                <Text style={styles.finishWeekTitle}>Finish the Week</Text>
-                <Text style={styles.finishWeekSub}>
-                  {finishWeekPayload.incompleteMuscles} muscle
-                  {finishWeekPayload.incompleteMuscles !== 1 ? 's' : ''} still to go
-                  {' '}· {finishWeekPayload.totalSetsNeeded.toFixed(1)} sets total
-                </Text>
-              </View>
-              <TouchableOpacity onPress={dismissFinishWeek} style={styles.dismissBtn}>
-                <Text style={styles.dismissText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            {finishWeekPayload.suggestions.map((s) => (
-              <View key={s.muscle} style={styles.finishSuggestion}>
-                <View style={styles.finishSuggestionHeader}>
-                  <Text style={styles.finishMuscle}>
-                    {s.muscle.replace(/([A-Z])/g, ' $1').trim()}
-                  </Text>
-                  <Text style={styles.finishRemaining}>
-                    {s.remaining.toFixed(1)} sets
-                  </Text>
-                </View>
-                <View style={styles.finishBtnRow}>
-                  {s.exercises.slice(0, 2).map((ex) => (
-                    <TouchableOpacity
-                      key={ex.exercise}
-                      style={[styles.finishLogBtn, { borderColor: accentColour }]}
-                      onPress={() =>
-                        logQuickFinisher(
-                          ex.exercise,
-                          ex.variants[0],
-                          Math.ceil(s.remaining),
-                        )
-                      }
-                    >
-                      <Text style={[styles.finishLogBtnText, { color: accentColour }]}>
-                        {ex.exercise}
-                      </Text>
-                      <Text style={styles.finishLogBtnSets}>
-                        {Math.ceil(s.remaining)} sets
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-            <TouchableOpacity
-              style={styles.finishSkipBtn}
-              onPress={dismissFinishWeek}
-            >
-              <Text style={styles.finishSkipText}>Skip — I'm done for today</Text>
-            </TouchableOpacity>
-          </View>
+          <FinishWeekCard
+            payload={finishWeekPayload}
+            accentColour={accentColour}
+            onLog={logQuickFinisher}
+            onDismiss={dismissFinishWeek}
+          />
         )}
 
         {/* Exercise cards */}
@@ -223,7 +400,9 @@ export default function ActiveSessionScreen() {
                       <Text style={[styles.exName, done && styles.exNameDone]}>
                         {ex.exercise}
                       </Text>
-                      <Text style={styles.exTargets}>{ex.targets.join(', ')}</Text>
+                      <Text style={styles.exTargets}>
+                        {ex.targets.map((t) => t.replace(/([A-Z])/g, ' $1').trim()).join(' · ')}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -231,35 +410,37 @@ export default function ActiveSessionScreen() {
                 {!done && (
                   <>
                     {/* Variant chips */}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.chipRow}
-                    >
-                      {allVariants.map((v) => (
-                        <TouchableOpacity
-                          key={v}
-                          onPress={() =>
-                            setLocalVariants((prev) => ({ ...prev, [ex.exercise]: v }))
-                          }
-                          style={[
-                            styles.chip,
-                            variant === v
-                              ? { backgroundColor: colour, borderColor: colour }
-                              : { borderColor: COLOURS.border },
-                          ]}
-                        >
-                          <Text
+                    {allVariants.length > 1 && (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.chipRow}
+                      >
+                        {allVariants.map((v) => (
+                          <TouchableOpacity
+                            key={v}
+                            onPress={() =>
+                              setLocalVariants((prev) => ({ ...prev, [ex.exercise]: v }))
+                            }
                             style={[
-                              styles.chipText,
-                              { color: variant === v ? '#000' : COLOURS.textSecondary },
+                              styles.chip,
+                              variant === v
+                                ? { backgroundColor: colour, borderColor: colour }
+                                : { borderColor: COLOURS.border },
                             ]}
                           >
-                            {v}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                            <Text
+                              style={[
+                                styles.chipText,
+                                { color: variant === v ? '#000' : COLOURS.textSecondary },
+                              ]}
+                            >
+                              {v}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
 
                     {/* Set dots + stepper */}
                     <View style={styles.setsSection}>
@@ -360,81 +541,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: RADIUS.full,
   },
-  finishWeekCard: {
-    backgroundColor: COLOURS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
-  },
-  finishWeekHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  finishWeekIcon: { fontSize: 24 },
-  finishWeekHeaderText: { flex: 1 },
-  finishWeekTitle: {
-    color: COLOURS.textPrimary,
-    fontSize: FONT.md,
-    fontWeight: '800',
-  },
-  finishWeekSub: { color: COLOURS.textSecondary, fontSize: FONT.sm },
-  dismissBtn: { padding: SPACING.xs },
-  dismissText: { color: COLOURS.textSecondary, fontSize: FONT.lg },
-  finishSuggestion: {
-    borderTopWidth: 1,
-    borderTopColor: COLOURS.border,
-    paddingTop: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  finishSuggestionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  finishMuscle: {
-    color: COLOURS.textPrimary,
-    fontSize: FONT.md,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  finishRemaining: { color: COLOURS.textSecondary, fontSize: FONT.sm },
-  finishBtnRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
-    flexWrap: 'wrap',
-  },
-  finishLogBtn: {
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 120,
-  },
-  finishLogBtnText: { fontSize: FONT.sm, fontWeight: '800' },
-  finishLogBtnSets: {
-    color: COLOURS.textMuted,
-    fontSize: FONT.xs,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  finishSkipBtn: {
-    borderTopWidth: 1,
-    borderTopColor: COLOURS.border,
-    paddingTop: SPACING.sm,
-    alignItems: 'center',
-    marginTop: SPACING.xs,
-  },
-  finishSkipText: {
-    color: COLOURS.textMuted,
-    fontSize: FONT.sm,
-    fontWeight: '600',
-  },
   exerciseList: { gap: SPACING.md },
   exCard: {
     backgroundColor: COLOURS.surface,
@@ -496,18 +602,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   stepBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: RADIUS.md,
     backgroundColor: COLOURS.surfaceHigh,
     alignItems: 'center',
@@ -515,22 +621,26 @@ const styles = StyleSheet.create({
   },
   stepBtnText: {
     color: COLOURS.textPrimary,
-    fontSize: FONT.lg,
+    fontSize: FONT.xl,
     fontWeight: '700',
-    lineHeight: FONT.lg + 4,
+    lineHeight: FONT.xl + 4,
   },
   setsValue: {
     color: COLOURS.textPrimary,
-    fontSize: FONT.xl,
+    fontSize: FONT.xxl,
     fontWeight: '900',
-    minWidth: 32,
+    minWidth: 40,
     textAlign: 'center',
   },
   logBtn: {
     borderRadius: RADIUS.md,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     alignItems: 'center',
     marginTop: SPACING.xs,
   },
-  logBtnText: { color: '#000', fontSize: FONT.md, fontWeight: '800' },
+  logBtnText: {
+    color: '#000',
+    fontSize: FONT.sm,
+    fontWeight: '800',
+  },
 });

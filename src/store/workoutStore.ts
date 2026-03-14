@@ -210,21 +210,23 @@ export const useWorkoutStore = create<WorkoutStore>()(
           }
         }
 
-        // Check finish week:
-        // - If the session just completed, run a fresh check
-        // - If the card is already showing (user is logging finishers), re-evaluate
-        //   so the card updates its remaining counts but stays visible
-        // - Otherwise null (card not shown mid-session)
+        // Check finish week — only at session completion.
+        // The card is self-contained once mounted: it tracks logged muscles
+        // in local React state and never re-reads from the store.
+        // We must NOT clear or re-evaluate finishWeekPayload after the card
+        // is showing, or it would unmount and remount (losing local state).
         let finishWeekPayload: FinishWeekPayload | null = state.finishWeekPayload;
-        if (sessionCompleted || state.finishWeekPayload?.shouldShow) {
+        if (sessionCompleted && !state.finishWeekPayload) {
+          // First time: run the check and show the card if warranted
           const freshPayload = checkFinishWeek(
             newHistory,
             getWeekStart(new Date()),
             state.weekTarget,
           );
-          // Keep the card open as long as there is still something to finish
           finishWeekPayload = freshPayload.shouldShow ? freshPayload : null;
         }
+        // If the card is already showing (finishWeekPayload !== null), leave it
+        // alone — the card component manages its own state from here.
 
         // Update personal bests
         const weeklyVolumes = processWeeklyVolumes(newHistory, state.weekTarget);
