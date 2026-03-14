@@ -10,7 +10,6 @@ import {
 import { useRouter } from 'expo-router';
 import { useWorkoutStore } from '../src/store/workoutStore';
 import { COLOURS, FONT, RADIUS, SPACING, categoryColour, gradeAccent } from '../src/theme';
-import { SessionExercise } from '../src/engine/sessionBuilder';
 import { exerciseLibrary } from '../src/data/exercises';
 
 export default function SessionBuilderScreen() {
@@ -19,14 +18,13 @@ export default function SessionBuilderScreen() {
     activeSession,
     buildNewSession,
     startSession,
-    clearSession,
     getWeekGrade,
   } = useWorkoutStore();
 
   const grade = getWeekGrade();
   const accentColour = gradeAccent(grade.grade);
 
-  const [editingSets, setEditingSets] = useState<Record<string, number>>({});
+  // Variant overrides only — sets are chosen during the active session
   const [editingVariants, setEditingVariants] = useState<Record<string, string>>({});
 
   if (!activeSession) {
@@ -45,8 +43,6 @@ export default function SessionBuilderScreen() {
     );
   }
 
-  const getSets = (exercise: string, defaultSets: number) =>
-    editingSets[exercise] ?? defaultSets;
   const getVariant = (exercise: string, defaultVariant: string) =>
     editingVariants[exercise] ?? defaultVariant;
 
@@ -57,7 +53,6 @@ export default function SessionBuilderScreen() {
 
   const handleShuffle = () => {
     buildNewSession();
-    setEditingSets({});
     setEditingVariants({});
   };
 
@@ -90,24 +85,24 @@ export default function SessionBuilderScreen() {
 
         {/* Overreach / complete week banner */}
         {isOverreach && overreachNote && (
-          <View style={[styles.axialNote, styles.overreachBanner]}>
-            <Text style={styles.axialNoteIcon}>
+          <View style={[styles.noteBanner, styles.overreachBanner]}>
+            <Text style={styles.noteIcon}>
               {activeSession.mode === 'complete' ? '🏆' : '⚡'}
             </Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.overreachTitle}>
                 {activeSession.mode === 'complete' ? 'Week Complete' : 'Almost There'}
               </Text>
-              <Text style={styles.axialNoteText}>{overreachNote}</Text>
+              <Text style={styles.noteText}>{overreachNote}</Text>
             </View>
           </View>
         )}
 
         {/* Axial note */}
         {axialNote && !isOverreach && (
-          <View style={styles.axialNote}>
-            <Text style={styles.axialNoteIcon}>🛡</Text>
-            <Text style={styles.axialNoteText}>{axialNote}</Text>
+          <View style={styles.noteBanner}>
+            <Text style={styles.noteIcon}>🛡</Text>
+            <Text style={styles.noteText}>{axialNote}</Text>
           </View>
         )}
 
@@ -115,7 +110,6 @@ export default function SessionBuilderScreen() {
         <View style={styles.exerciseList}>
           {activeSession.exercises.map((ex, idx) => {
             const colour = categoryColour(ex.movementCategory);
-            const sets = getSets(ex.exercise, ex.sets);
             const variant = getVariant(ex.exercise, ex.variant);
             const allVariants = exerciseLibrary[ex.exercise]?.variants ?? [variant];
             const axialCost = exerciseLibrary[ex.exercise]?.axialCost ?? 'low';
@@ -128,93 +122,72 @@ export default function SessionBuilderScreen() {
                     <View style={styles.exNumberBadge}>
                       <Text style={[styles.exNumber, { color: colour }]}>{idx + 1}</Text>
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.exName}>{ex.exercise}</Text>
-                      <Text style={styles.exTargets}>{ex.targets.join(', ')}</Text>
+                      <Text style={styles.exTargets}>
+                        {ex.targets.map((t) => t.replace(/([A-Z])/g, ' $1').trim()).join(' · ')}
+                      </Text>
                     </View>
                   </View>
-                  <View style={styles.exHeaderRight}>
-                    {axialCost !== 'low' && (
-                      <View style={[
-                        styles.axialPill,
-                        { backgroundColor: axialCost === 'high' ? COLOURS.danger + '33' : COLOURS.gradeC + '33' },
+                  {axialCost !== 'low' && (
+                    <View style={[
+                      styles.axialPill,
+                      { backgroundColor: axialCost === 'high' ? COLOURS.danger + '33' : COLOURS.gradeC + '33' },
+                    ]}>
+                      <Text style={[
+                        styles.axialPillText,
+                        { color: axialCost === 'high' ? COLOURS.danger : COLOURS.gradeC },
                       ]}>
-                        <Text style={[
-                          styles.axialPillText,
-                          { color: axialCost === 'high' ? COLOURS.danger : COLOURS.gradeC },
-                        ]}>
-                          {axialCost} load
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Variant chip row */}
-                <Text style={styles.fieldLabel}>VARIATION</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  {allVariants.map((v) => (
-                    <TouchableOpacity
-                      key={v}
-                      onPress={() =>
-                        setEditingVariants((prev) => ({ ...prev, [ex.exercise]: v }))
-                      }
-                      style={[
-                        styles.chip,
-                        variant === v
-                          ? { backgroundColor: colour, borderColor: colour }
-                          : { borderColor: COLOURS.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          { color: variant === v ? '#000' : COLOURS.textSecondary },
-                        ]}
-                      >
-                        {v}
+                        {axialCost} load
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                {/* Sets stepper */}
-                <View style={styles.setsRow}>
-                  <Text style={styles.fieldLabel}>SETS</Text>
-                  <View style={styles.stepper}>
-                    <TouchableOpacity
-                      style={styles.stepBtn}
-                      onPress={() =>
-                        setEditingSets((prev) => ({
-                          ...prev,
-                          [ex.exercise]: Math.max(1, (prev[ex.exercise] ?? ex.sets) - 1),
-                        }))
-                      }
-                    >
-                      <Text style={styles.stepBtnText}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.setsValue}>{sets}</Text>
-                    <TouchableOpacity
-                      style={styles.stepBtn}
-                      onPress={() =>
-                        setEditingSets((prev) => ({
-                          ...prev,
-                          [ex.exercise]: Math.min(10, (prev[ex.exercise] ?? ex.sets) + 1),
-                        }))
-                      }
-                    >
-                      <Text style={styles.stepBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
+                    </View>
+                  )}
                 </View>
+
+                {/* Variant chip row — only shown when there are multiple variants */}
+                {allVariants.length > 1 && (
+                  <>
+                    <Text style={styles.fieldLabel}>VARIATION</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.chipRow}
+                    >
+                      {allVariants.map((v) => (
+                        <TouchableOpacity
+                          key={v}
+                          onPress={() =>
+                            setEditingVariants((prev) => ({ ...prev, [ex.exercise]: v }))
+                          }
+                          style={[
+                            styles.chip,
+                            variant === v
+                              ? { backgroundColor: colour, borderColor: colour }
+                              : { borderColor: COLOURS.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.chipText,
+                              { color: variant === v ? '#000' : COLOURS.textSecondary },
+                            ]}
+                          >
+                            {v}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
               </View>
             );
           })}
         </View>
+
+        {/* Sets hint */}
+        <Text style={styles.setsHint}>
+          You'll choose sets for each exercise once the session starts.
+        </Text>
 
         {/* Start button */}
         <TouchableOpacity
@@ -235,6 +208,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLOURS.base },
   scroll: { flex: 1 },
   content: { padding: SPACING.md, paddingTop: SPACING.lg },
+
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
@@ -256,6 +230,7 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     fontWeight: '800',
   },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,7 +253,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
   },
   shuffleText: { color: COLOURS.textPrimary, fontSize: FONT.sm, fontWeight: '700' },
-  axialNote: {
+
+  noteBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
@@ -287,8 +263,8 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
-  axialNoteIcon: { fontSize: 18 },
-  axialNoteText: {
+  noteIcon: { fontSize: 18 },
+  noteText: {
     color: COLOURS.textSecondary,
     fontSize: FONT.sm,
     fontWeight: '600',
@@ -305,7 +281,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 2,
   },
-  exerciseList: { gap: SPACING.md, marginBottom: SPACING.xl },
+
+  exerciseList: { gap: SPACING.md, marginBottom: SPACING.md },
   exCard: {
     backgroundColor: COLOURS.surface,
     borderRadius: RADIUS.lg,
@@ -317,6 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: SPACING.sm,
   },
   exHeaderLeft: {
     flexDirection: 'row',
@@ -334,14 +312,20 @@ const styles = StyleSheet.create({
   },
   exNumber: { fontSize: FONT.sm, fontWeight: '900' },
   exName: { color: COLOURS.textPrimary, fontSize: FONT.md, fontWeight: '700' },
-  exTargets: { color: COLOURS.textSecondary, fontSize: FONT.xs, textTransform: 'capitalize' },
-  exHeaderRight: { alignItems: 'flex-end' },
+  exTargets: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.xs,
+    textTransform: 'capitalize',
+    marginTop: 2,
+  },
   axialPill: {
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
+    alignSelf: 'flex-start',
   },
   axialPillText: { fontSize: FONT.xs, fontWeight: '700' },
+
   fieldLabel: {
     color: COLOURS.textMuted,
     fontSize: FONT.xs,
@@ -362,43 +346,19 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
   },
   chipText: { fontSize: FONT.sm, fontWeight: '600' },
-  setsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: SPACING.xs,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  stepBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLOURS.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: {
-    color: COLOURS.textPrimary,
-    fontSize: FONT.xl,
-    fontWeight: '700',
-    lineHeight: FONT.xl + 4,
-  },
-  setsValue: {
-    color: COLOURS.textPrimary,
-    fontSize: FONT.xxl,
-    fontWeight: '900',
-    minWidth: 40,
+
+  setsHint: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.sm,
     textAlign: 'center',
+    marginBottom: SPACING.lg,
+    fontStyle: 'italic',
   },
+
   startBtn: {
     borderRadius: RADIUS.full,
     padding: SPACING.lg,
     alignItems: 'center',
-    marginTop: SPACING.md,
   },
   startBtnText: {
     color: '#000',
