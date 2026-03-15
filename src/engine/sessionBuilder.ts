@@ -410,12 +410,36 @@ export function buildSession(
   }
 
   // ── Pass 2: fill remaining slots from top recs (any category) ────────────
+  // Bucket-level deduplication: do NOT add a second exercise from the same
+  // movement bucket (e.g. hipDominant) unless all 4 categories are already
+  // represented in the session. This is the key guard that prevents
+  // Deadlift (Heavy) + Deadlift (Moderate) appearing together — they share
+  // the same bucket even though they have different sub-tiers.
   if (chosen.length < sessionSize) {
+    const allCategoriesCovered =
+      chosenCategories.has('posterior') &&
+      chosenCategories.has('squat') &&
+      chosenCategories.has('pull') &&
+      chosenCategories.has('press');
+
     for (const rec of recs) {
       if (chosen.length >= sessionSize) break;
       if (doneThisWeek.has(rec.exercise)) continue;
       if (chosen.some((c) => c.exercise === rec.exercise)) continue;
       if (!canAfford(rec.exercise, budget)) continue;
+
+      // If all 4 categories are already covered, allow any affordable exercise.
+      // If not all covered, only allow exercises from categories not yet in the session
+      // OR from categories already in the session but only if the rec's bucket
+      // is not already represented (prevents double-deadlift, double-row).
+      if (!allCategoriesCovered) {
+        const recData = exerciseLibrary[rec.exercise];
+        const recBucket = recData?.bucket;
+        const bucketAlreadyUsed = recBucket
+          ? chosen.some((c) => exerciseLibrary[c.exercise]?.bucket === recBucket)
+          : false;
+        if (bucketAlreadyUsed) continue;
+      }
 
       chosen.push(rec);
       chosenCategories.add(rec.movementCategory);
