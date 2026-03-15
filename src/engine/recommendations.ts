@@ -21,18 +21,16 @@ export interface ExerciseRecommendation {
 /**
  * Returns scored exercise recommendations sorted by descending score.
  *
+ * Philosophy: recommendations are primarily NEED-DRIVEN, matching the original PWA.
+ * The builder handles structural balancing (category spread, axial budgets).
+ * This function should not pre-bias the list by taxonomy — that would double-govern.
+ *
  * Scoring formula (per muscle need):
- *   score += muscleContribution × need.remaining × 3 × zeroBoost × chronicBoost
+ *   rawScore += muscleContribution × need.remaining × 3 × zeroBoost × chronicBoost
  *
- * Then the exercise's priorityMultiplier (from the 4-bucket / sub-tier taxonomy)
- * is applied to the total score:
- *   finalScore = rawScore × priorityMultiplier
- *
- * This produces the 3:2:2:1 bucket weighting with sub-tier ordering:
- *   hip-dominant heavy hinge (1.000) > moderate hinge (0.850) > single-leg (0.700) > GHD (0.650)
- *   squat axial (0.667) ≈ pull bent-over (0.667) > spine-friendly (0.600) ≈ supported row (0.600)
- *   lunge (0.567) ≈ vertical pull (0.567)
- *   press horizontal (0.333) > vertical press (0.300)
+ * The priorityMultiplier (bucket taxonomy) is applied only as a very light tiebreaker
+ * (5% influence) so that within the same need-level, hip-dominant exercises are
+ * slightly preferred — but need always dominates.
  *
  * Additional modifiers (preserved from original PWA):
  *   - Zero-boost (1.5×) for muscles not yet touched this week
@@ -85,14 +83,18 @@ export function getSmartRecommendations(
 
     if (rawScore <= 0) return;
 
-    // Apply the 4-bucket / sub-tier priority multiplier
-    // Default to 0.333 (lowest press tier) if not set, so untagged compounds
-    // still appear but at the bottom of the list.
+    // Need-driven score — this is the primary signal.
+    // The priorityMultiplier is applied at only 5% influence so it acts as a
+    // tiebreaker within the same need-level, not as a structural pre-filter.
+    // This matches the original PWA philosophy: "what best hits current needs?"
     const multiplier = data.priorityMultiplier ?? 0.333;
-    let score = rawScore * multiplier;
+    // 95% need-driven + 5% taxonomy tiebreaker
+    let score = rawScore * (0.95 + 0.05 * multiplier);
 
-    // Progressive posterior penalty for expensive posterior movements
-    // (preserved from original PWA — only penalises high/moderate axial posterior)
+    // Progressive posterior penalty for expensive posterior movements.
+    // Preserved from original PWA: progressively devalues high/moderate axial
+    // posterior work based on how many posterior sessions have already happened
+    // this week. Does NOT ban posterior — just reduces its score.
     const cat = data.movementCategory;
     if (cat === 'posterior') {
       const n = recentSessions['posterior'] || 0;

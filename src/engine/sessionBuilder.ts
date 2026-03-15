@@ -3,7 +3,6 @@ import {
   MovementCategory,
   MuscleGroup,
   PRIMARY_MUSCLES,
-  SubTier,
 } from '../data/exercises';
 import { WorkoutEntry, getWorkoutsForWeek, calculateCurrentWeekVolume } from './volume';
 import { getMuscleGroupPriorities } from './priority';
@@ -11,16 +10,14 @@ import { getSmartRecommendations, ExerciseRecommendation } from './recommendatio
 import { selectVariant } from './variantSelector';
 
 // ── Session builder constants ─────────────────────────────────────────────
-// These are hard limits — not suggestions. Matching the original PWA exactly.
-const MAX_HIGH_AXIAL = 1;         // At most 1 high-axial exercise per session
-const MAX_MODERATE_AXIAL = 2;     // At most 2 moderate-axial exercises per session
-const MAX_HIGH_ERECTOR = 1;       // At most 1 high-erector exercise per session
+// Hard limits matching the original PWA philosophy.
+const MAX_HIGH_AXIAL = 1;            // At most 1 high-axial exercise per session
+const MAX_MODERATE_AXIAL = 2;        // At most 2 moderate-axial exercises per session
+const MAX_HIGH_ERECTOR = 1;          // At most 1 high-erector exercise per session
 const MAX_POSTERIOR_PER_SESSION = 2; // At most 2 posterior exercises per session
 
-// Stochastic axial override: small chance to allow a second high-axial exercise.
-// This is the "guardrail with chaos" — rare but possible.
-// Set to 0.08 (8%) to match the spirit of the original PWA (which had no override,
-// but we want occasional variety). Lower than the previous 15%.
+// Small stochastic override: rare chance to allow a second high-axial exercise.
+// This is the "guardrail with chaos" element — possible but uncommon.
 const HIGH_AXIAL_OVERRIDE_CHANCE = 0.08;
 
 // Overreach threshold: if ALL primary muscles are at or above this % of target,
@@ -54,7 +51,6 @@ interface AxialBudget {
   moderateAxialCount: number;
   highErectorCount: number;
   posteriorCount: number;
-  usedSubTiers: Set<SubTier>;
 }
 
 function freshBudget(): AxialBudget {
@@ -63,7 +59,6 @@ function freshBudget(): AxialBudget {
     moderateAxialCount: 0,
     highErectorCount: 0,
     posteriorCount: 0,
-    usedSubTiers: new Set(),
   };
 }
 
@@ -78,16 +73,16 @@ function getErectorCost(exerciseName: string): 'high' | 'moderate' | 'low' {
 /**
  * Hard gate: returns true only if this exercise fits within the current budget.
  *
- * Rules (in priority order):
+ * Rules (matching original PWA):
  *  1. Posterior quota — at most MAX_POSTERIOR_PER_SESSION posterior exercises.
- *  2. Sub-tier deduplication — at most ONE exercise per sub-tier per session.
- *     This prevents Deadlift (Heavy) + Deadlift (Moderate) in the same session,
- *     or Row (Bent-Over) + Row (Supported) appearing together.
- *  3. High-axial budget — at most MAX_HIGH_AXIAL high-axial exercises.
+ *  2. High-axial budget — at most MAX_HIGH_AXIAL high-axial exercises.
  *     A small stochastic override (HIGH_AXIAL_OVERRIDE_CHANCE) allows a rare
  *     second high-axial exercise for unpredictability.
- *  4. Moderate-axial budget — at most MAX_MODERATE_AXIAL moderate-axial exercises.
- *  5. High-erector budget — at most MAX_HIGH_ERECTOR high-erector exercises.
+ *  3. Moderate-axial budget — at most MAX_MODERATE_AXIAL moderate-axial exercises.
+ *  4. High-erector budget — at most MAX_HIGH_ERECTOR high-erector exercises.
+ *
+ * Note: sub-tier deduplication has been REMOVED. The original PWA did not have it.
+ * Category spread and affordability constraints are sufficient guardrails.
  */
 function canAfford(exerciseName: string, budget: AxialBudget): boolean {
   const data = exerciseLibrary[exerciseName];
@@ -96,29 +91,21 @@ function canAfford(exerciseName: string, budget: AxialBudget): boolean {
   const axial = getAxialCost(exerciseName);
   const erector = getErectorCost(exerciseName);
   const cat = data.movementCategory;
-  const subTier = data.subTier;
 
   // Rule 1: Posterior quota
   if (cat === 'posterior' && budget.posteriorCount >= MAX_POSTERIOR_PER_SESSION) return false;
 
-  // Rule 2: Sub-tier deduplication
-  // If this exercise has a sub-tier and we've already used that sub-tier,
-  // allow it only with a very small stochastic chance (5%) for rare variety.
-  if (subTier && budget.usedSubTiers.has(subTier)) {
-    if (Math.random() > 0.05) return false;
-  }
-
-  // Rule 3: High-axial budget (hard gate with small override)
+  // Rule 2: High-axial budget (hard gate with small stochastic override)
   if (axial === 'high') {
     if (budget.highAxialCount >= MAX_HIGH_AXIAL) {
       if (Math.random() > HIGH_AXIAL_OVERRIDE_CHANCE) return false;
     }
   }
 
-  // Rule 4: Moderate-axial budget (hard gate, no override)
+  // Rule 3: Moderate-axial budget (hard gate, no override)
   if (axial === 'moderate' && budget.moderateAxialCount >= MAX_MODERATE_AXIAL) return false;
 
-  // Rule 5: High-erector budget (hard gate, no override)
+  // Rule 4: High-erector budget (hard gate, no override)
   if (erector === 'high' && budget.highErectorCount >= MAX_HIGH_ERECTOR) return false;
 
   return true;
@@ -137,12 +124,16 @@ function trackCost(exerciseName: string, budget: AxialBudget): void {
 
   if (erector === 'high') budget.highErectorCount++;
   if (data.movementCategory === 'posterior') budget.posteriorCount++;
-  if (data.subTier) budget.usedSubTiers.add(data.subTier);
 }
 
 /**
  * Finds the best affordable alternative in the same movement category.
  * Prefers low-axial/low-erector exercises when the budget is tight.
+ *
+ * Includes the original PWA's specific squat/posterior interaction penalty:
+ * if posterior work has already accumulated in this session, Squat (Barbell)
+ * is downgraded by 20% when selecting alternatives.
+ *
  * This mirrors findAffordableAlternative() from the original PWA.
  */
 function findAffordableAlternative(
@@ -152,13 +143,27 @@ function findAffordableAlternative(
   doneThisWeek: Set<string>,
   budget: AxialBudget,
 ): ExerciseRecommendation | null {
-  const candidates = recs.filter(
-    (r) =>
-      r.movementCategory === category &&
-      canAfford(r.exercise, budget) &&
-      !chosen.some((c) => c.exercise === r.exercise) &&
-      !doneThisWeek.has(r.exercise),
-  );
+  const candidates = recs
+    .filter(
+      (r) =>
+        r.movementCategory === category &&
+        canAfford(r.exercise, budget) &&
+        !chosen.some((c) => c.exercise === r.exercise) &&
+        !doneThisWeek.has(r.exercise),
+    )
+    .map((r) => {
+      // Original PWA: apply squat/posterior interaction penalty in alternative selection
+      let adjustedScore = r.score;
+      if (
+        budget.posteriorCount > 0 &&
+        category === 'squat' &&
+        r.exercise === 'Squat (Barbell)'
+      ) {
+        adjustedScore *= 0.8;
+      }
+      return { ...r, score: adjustedScore };
+    })
+    .sort((a, b) => b.score - a.score);
 
   if (candidates.length === 0) return null;
 
@@ -182,7 +187,18 @@ function findAffordableAlternative(
   return top[Math.floor(Math.random() * top.length)];
 }
 
-/** Determines session size based on remaining primary volume. */
+/**
+ * Determines session size based on TOTAL remaining primary volume.
+ *
+ * Restored to match the original PWA exactly:
+ *   totalRemaining <= 6  → 2 exercises
+ *   totalRemaining <= 12 → 3 exercises
+ *   totalRemaining <= 20 → 4 exercises
+ *   otherwise            → 4 exercises (capped at 4 in normal mode)
+ *
+ * The original capped priority sessions at 4. This is intentional — it keeps
+ * sessions crisp and prevents the session from feeling heavy.
+ */
 function getSessionSize(
   history: WorkoutEntry[],
   weekStart: Date,
@@ -191,13 +207,10 @@ function getSessionSize(
   const priorities = getMuscleGroupPriorities(history, weekStart, weekTarget);
   const primaryNeeds = priorities.filter((p) => p.isPrimary && p.remaining > 0);
   const totalRemaining = primaryNeeds.reduce((sum, p) => sum + p.remaining, 0);
-  const avgRemaining = primaryNeeds.length > 0 ? totalRemaining / primaryNeeds.length : 0;
 
-  if (avgRemaining <= 1) return 2;
-  if (avgRemaining <= 2) return 3;
-  if (avgRemaining <= 4) return 4;
-  if (avgRemaining <= 6) return 5;
-  return 5;
+  if (totalRemaining <= 6) return 2;
+  if (totalRemaining <= 12) return 3;
+  return 4; // Capped at 4 — matching original PWA
 }
 
 /** Returns the set of exercises already done this week (by name). */
@@ -233,9 +246,7 @@ function isWeekComplete(
   return PRIMARY_MUSCLES.every((m) => (volume[m] || 0) >= weekTarget);
 }
 
-/** Builds an overreach session: balanced across all 4 movement categories.
- *  Respects the same axial budget and sub-tier deduplication rules.
- */
+/** Builds an overreach session: balanced across all 4 movement categories. */
 function buildOverreachSession(
   history: WorkoutEntry[],
   weekStart: Date,
@@ -248,7 +259,7 @@ function buildOverreachSession(
   const chosen: Array<{ name: string; data: typeof exerciseLibrary[string] }> = [];
   const chosenCategories = new Set<MovementCategory>();
 
-  // Shuffle category order for variety, but still respect priority
+  // Shuffle category order for variety
   const targetCategories: MovementCategory[] = shuffle(['posterior', 'squat', 'pull', 'press']);
 
   for (const cat of targetCategories) {
@@ -338,16 +349,25 @@ const SESSION_LABELS: Record<number, string> = {
 /**
  * Builds a priority-based session.
  *
- * Axial fatigue guardrails (matching original PWA behaviour):
+ * Matches the original PWA's two-pass approach:
+ *
+ * Pass 1: Build a shuffled pool of the top-scored affordable recs (sessionSize + 5).
+ *   Apply the squat/posterior interaction penalty to the pool.
+ *   Iterate the shuffled pool and pick one exercise per movement category.
+ *   If the top rec in a category fails the budget, call findAffordableAlternative.
+ *
+ * Pass 2: Fill remaining slots from the full sorted rec list (simple fill).
+ *   No bucket-balancing or sub-tier deduplication — the original didn't have these.
+ *   The axial budget and posterior quota are the only structural guardrails.
+ *
+ * Session size: based on TOTAL remaining primary volume, capped at 4.
+ *
+ * Axial fatigue guardrails:
  *  - MAX_HIGH_AXIAL = 1: at most one high-axial exercise (e.g. heavy deadlift)
- *  - MAX_MODERATE_AXIAL = 2: at most two moderate-axial exercises (e.g. bent-over row + RDL)
+ *  - MAX_MODERATE_AXIAL = 2: at most two moderate-axial exercises
  *  - MAX_HIGH_ERECTOR = 1: at most one high-erector exercise
  *  - MAX_POSTERIOR_PER_SESSION = 2: at most two posterior exercises
- *  - Sub-tier deduplication: at most one exercise per sub-tier (prevents DL Heavy + DL Moderate,
- *    or Bent-Over Row + Supported Row appearing together)
- *
- * When an exercise fails the budget, findAffordableAlternative() is called to find
- * a lower-cost substitute in the same movement category before giving up on that category.
+ *  - 8% stochastic override for a second high-axial exercise (rare chaos)
  */
 export function buildSession(
   history: WorkoutEntry[],
@@ -375,23 +395,60 @@ export function buildSession(
   const chosen: ExerciseRecommendation[] = [];
   const chosenCategories = new Set<MovementCategory>();
 
-  // ── Pass 1: one exercise per movement category (category diversity first) ─
-  // Iterate categories in priority order. For each category, take the top-scored
-  // affordable rec. If the top rec fails the budget, call findAffordableAlternative.
+  // ── Build the top-pool (original PWA approach) ───────────────────────────
+  // Take the top (sessionSize + 5) recs, apply the squat/posterior interaction
+  // penalty, then shuffle. This gives category diversity from a high-quality pool
+  // rather than rigid category-order iteration over the full list.
+  const topPool = recs
+    .filter((r) => !doneThisWeek.has(r.exercise))
+    .slice(0, sessionSize + 5)
+    .map((r) => {
+      // Original PWA: specific squat/posterior interaction penalty.
+      // If posterior work has already happened this week, downgrade Squat (Barbell).
+      // This steers toward spine-friendly squat patterns when posterior load is high.
+      let adjustedScore = r.score;
+      if (
+        budget.posteriorCount >= 1 &&
+        r.movementCategory === 'squat' &&
+        r.exercise === 'Squat (Barbell)'
+      ) {
+        adjustedScore *= 0.8;
+      }
+      return { ...r, score: adjustedScore };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  // Shuffle the top pool to introduce unpredictability (original PWA behaviour)
+  const shuffledPool = shuffle(topPool.slice(0, sessionSize + 5));
+
+  // ── Pass 1: one exercise per movement category from the shuffled pool ────
   const categoryOrder: MovementCategory[] = ['posterior', 'squat', 'pull', 'press'];
 
   for (const cat of categoryOrder) {
     if (chosen.length >= sessionSize) break;
 
-    // Find the top-scored rec in this category
-    const topRec = recs.find(
+    // Find the top-scored rec in this category from the shuffled pool
+    const topRec = shuffledPool.find(
       (r) =>
         r.movementCategory === cat &&
-        !doneThisWeek.has(r.exercise) &&
         !chosen.some((c) => c.exercise === r.exercise),
     );
 
-    if (!topRec) continue;
+    if (!topRec) {
+      // Category not in top pool — fall back to full rec list
+      const fallback = recs.find(
+        (r) =>
+          r.movementCategory === cat &&
+          !doneThisWeek.has(r.exercise) &&
+          !chosen.some((c) => c.exercise === r.exercise),
+      );
+      if (fallback && canAfford(fallback.exercise, budget)) {
+        chosen.push(fallback);
+        chosenCategories.add(cat);
+        trackCost(fallback.exercise, budget);
+      }
+      continue;
+    }
 
     if (canAfford(topRec.exercise, budget)) {
       chosen.push(topRec);
@@ -409,67 +466,20 @@ export function buildSession(
     }
   }
 
-  // ── Pass 2: fill remaining slots by targeting the least-represented bucket ────
-  // This is the key fix for the double-deadlift problem.
-  // Instead of iterating the highest-scored list (which is dominated by
-  // hip-dominant exercises), we pick from whichever bucket has the fewest
-  // exercises in the session so far.
-  // A second exercise from the same bucket is allowed only via a small
-  // stochastic override (7%) to preserve the 'chaos' element.
+  // ── Pass 2: fill remaining slots from the full sorted rec list ───────────
+  // Simple fill — no bucket-balancing, no sub-tier deduplication.
+  // The axial budget and posterior quota are the only guardrails.
+  // This matches the original PWA's second pass exactly.
   if (chosen.length < sessionSize) {
-    // Track how many exercises each bucket already has
-    const bucketCounts: Record<string, number> = {
-      hipDominant: 0,
-      squat: 0,
-      pull: 0,
-      press: 0,
-    };
-    chosen.forEach((c) => {
-      const b = exerciseLibrary[c.exercise]?.bucket;
-      if (b) bucketCounts[b] = (bucketCounts[b] ?? 0) + 1;
-    });
+    for (const rec of recs) {
+      if (chosen.length >= sessionSize) break;
+      if (doneThisWeek.has(rec.exercise)) continue;
+      if (chosen.some((c) => c.exercise === rec.exercise)) continue;
+      if (!canAfford(rec.exercise, budget)) continue;
 
-    const allBuckets: Array<'hipDominant' | 'squat' | 'pull' | 'press'> = [
-      'hipDominant',
-      'squat',
-      'pull',
-      'press',
-    ];
-
-    while (chosen.length < sessionSize) {
-      // Sort buckets: least-represented first.
-      // Apply a heavy penalty to hipDominant for a second slot — it is the
-      // highest-scoring bucket and would always win without this penalty.
-      const sortedBuckets = [...allBuckets].sort((a, b) => {
-        const aCount = (bucketCounts[a] ?? 0) + (a === 'hipDominant' && (bucketCounts[a] ?? 0) >= 1 ? 10 : 0);
-        const bCount = (bucketCounts[b] ?? 0) + (b === 'hipDominant' && (bucketCounts[b] ?? 0) >= 1 ? 10 : 0);
-        return aCount - bCount;
-      });
-
-      let filled = false;
-      for (const bucket of sortedBuckets) {
-        // If this bucket already has an exercise, only allow a second via stochastic override
-        if ((bucketCounts[bucket] ?? 0) >= 1 && Math.random() > 0.07) continue;
-
-        const candidate = recs.find(
-          (r) =>
-            !doneThisWeek.has(r.exercise) &&
-            !chosen.some((c) => c.exercise === r.exercise) &&
-            canAfford(r.exercise, budget) &&
-            exerciseLibrary[r.exercise]?.bucket === bucket,
-        );
-
-        if (candidate) {
-          chosen.push(candidate);
-          chosenCategories.add(candidate.movementCategory);
-          trackCost(candidate.exercise, budget);
-          bucketCounts[bucket] = (bucketCounts[bucket] ?? 0) + 1;
-          filled = true;
-          break;
-        }
-      }
-
-      if (!filled) break; // No more affordable exercises available in any bucket
+      chosen.push(rec);
+      chosenCategories.add(rec.movementCategory);
+      trackCost(rec.exercise, budget);
     }
   }
 
@@ -479,11 +489,12 @@ export function buildSession(
   }
 
   // ── Stochastic shuffle of final order ────────────────────────────────────
-  const shuffled = shuffle(chosen.slice(0, sessionSize));
+  const finalChosen = shuffle(chosen.slice(0, sessionSize));
 
   // ── 35% accessory finisher ───────────────────────────────────────────────
+  // Only add a finisher if the session has fewer than 4 exercises.
   let finisher: SessionExercise | null = null;
-  if (accessoryNeeds.length > 0 && shuffled.length < 4 && Math.random() < 0.35) {
+  if (accessoryNeeds.length > 0 && finalChosen.length < 4 && Math.random() < 0.35) {
     const topNeed = accessoryNeeds[0];
     const accessoryCandidates = Object.entries(exerciseLibrary).filter(
       ([, data]) => data.category === 'accessory' && (data.muscles[topNeed.muscle] ?? 0) > 0,
@@ -507,7 +518,7 @@ export function buildSession(
   }
 
   // ── Map to SessionExercise ────────────────────────────────────────────────
-  const exercises: SessionExercise[] = shuffled.map((rec) => ({
+  const exercises: SessionExercise[] = finalChosen.map((rec) => ({
     exercise: rec.exercise,
     variant: selectVariant(rec.exercise, rec.variants, lastUsedVariantsByExercise, weekStart),
     sets: 3,
