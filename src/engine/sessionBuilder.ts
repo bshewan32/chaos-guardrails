@@ -409,41 +409,67 @@ export function buildSession(
     }
   }
 
-  // ── Pass 2: fill remaining slots from top recs (any category) ────────────
-  // Bucket-level deduplication: do NOT add a second exercise from the same
-  // movement bucket (e.g. hipDominant) unless all 4 categories are already
-  // represented in the session. This is the key guard that prevents
-  // Deadlift (Heavy) + Deadlift (Moderate) appearing together — they share
-  // the same bucket even though they have different sub-tiers.
+  // ── Pass 2: fill remaining slots by targeting the least-represented bucket ────
+  // This is the key fix for the double-deadlift problem.
+  // Instead of iterating the highest-scored list (which is dominated by
+  // hip-dominant exercises), we pick from whichever bucket has the fewest
+  // exercises in the session so far.
+  // A second exercise from the same bucket is allowed only via a small
+  // stochastic override (7%) to preserve the 'chaos' element.
   if (chosen.length < sessionSize) {
-    const allCategoriesCovered =
-      chosenCategories.has('posterior') &&
-      chosenCategories.has('squat') &&
-      chosenCategories.has('pull') &&
-      chosenCategories.has('press');
+    // Track how many exercises each bucket already has
+    const bucketCounts: Record<string, number> = {
+      hipDominant: 0,
+      squat: 0,
+      pull: 0,
+      press: 0,
+    };
+    chosen.forEach((c) => {
+      const b = exerciseLibrary[c.exercise]?.bucket;
+      if (b) bucketCounts[b] = (bucketCounts[b] ?? 0) + 1;
+    });
 
-    for (const rec of recs) {
-      if (chosen.length >= sessionSize) break;
-      if (doneThisWeek.has(rec.exercise)) continue;
-      if (chosen.some((c) => c.exercise === rec.exercise)) continue;
-      if (!canAfford(rec.exercise, budget)) continue;
+    const allBuckets: Array<'hipDominant' | 'squat' | 'pull' | 'press'> = [
+      'hipDominant',
+      'squat',
+      'pull',
+      'press',
+    ];
 
-      // If all 4 categories are already covered, allow any affordable exercise.
-      // If not all covered, only allow exercises from categories not yet in the session
-      // OR from categories already in the session but only if the rec's bucket
-      // is not already represented (prevents double-deadlift, double-row).
-      if (!allCategoriesCovered) {
-        const recData = exerciseLibrary[rec.exercise];
-        const recBucket = recData?.bucket;
-        const bucketAlreadyUsed = recBucket
-          ? chosen.some((c) => exerciseLibrary[c.exercise]?.bucket === recBucket)
-          : false;
-        if (bucketAlreadyUsed) continue;
+    while (chosen.length < sessionSize) {
+      // Sort buckets: least-represented first.
+      // Apply a heavy penalty to hipDominant for a second slot — it is the
+      // highest-scoring bucket and would always win without this penalty.
+      const sortedBuckets = [...allBuckets].sort((a, b) => {
+        const aCount = (bucketCounts[a] ?? 0) + (a === 'hipDominant' && (bucketCounts[a] ?? 0) >= 1 ? 10 : 0);
+        const bCount = (bucketCounts[b] ?? 0) + (b === 'hipDominant' && (bucketCounts[b] ?? 0) >= 1 ? 10 : 0);
+        return aCount - bCount;
+      });
+
+      let filled = false;
+      for (const bucket of sortedBuckets) {
+        // If this bucket already has an exercise, only allow a second via stochastic override
+        if ((bucketCounts[bucket] ?? 0) >= 1 && Math.random() > 0.07) continue;
+
+        const candidate = recs.find(
+          (r) =>
+            !doneThisWeek.has(r.exercise) &&
+            !chosen.some((c) => c.exercise === r.exercise) &&
+            canAfford(r.exercise, budget) &&
+            exerciseLibrary[r.exercise]?.bucket === bucket,
+        );
+
+        if (candidate) {
+          chosen.push(candidate);
+          chosenCategories.add(candidate.movementCategory);
+          trackCost(candidate.exercise, budget);
+          bucketCounts[bucket] = (bucketCounts[bucket] ?? 0) + 1;
+          filled = true;
+          break;
+        }
       }
 
-      chosen.push(rec);
-      chosenCategories.add(rec.movementCategory);
-      trackCost(rec.exercise, budget);
+      if (!filled) break; // No more affordable exercises available in any bucket
     }
   }
 
