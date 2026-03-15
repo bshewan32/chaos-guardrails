@@ -129,8 +129,8 @@ function buildOverreachSession(
   const chosen: Array<{ name: string; data: typeof exerciseLibrary[string] }> = [];
   const chosenCategories = new Set<MovementCategory>();
 
-  // Target: one exercise per movement category (pull, squat, press, posterior)
-  const targetCategories: MovementCategory[] = ['pull', 'squat', 'press', 'posterior'];
+  // Target: one exercise per movement category, ordered by bucket priority
+  const targetCategories: MovementCategory[] = ['posterior', 'squat', 'pull', 'press'];
 
   // Shuffle the category order for variety
   const shuffledCategories = shuffle(targetCategories);
@@ -336,7 +336,8 @@ export function buildSession(
   }
 
   // ── Pass 2: category diversity — inject missing categories ───────────────
-  const allCategories: MovementCategory[] = ['pull', 'squat', 'press', 'posterior'];
+  // Order reflects bucket priority: hip-dominant first, then squat/pull, press last
+  const allCategories: MovementCategory[] = ['posterior', 'squat', 'pull', 'press'];
   if (chosen.length < sessionSize) {
     for (const cat of allCategories) {
       if (chosenCategories.has(cat)) continue;
