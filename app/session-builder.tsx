@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -24,9 +24,6 @@ export default function SessionBuilderScreen() {
   const grade = getWeekGrade();
   const accentColour = gradeAccent(grade.grade);
 
-  // Variant overrides only — sets are chosen during the active session
-  const [editingVariants, setEditingVariants] = useState<Record<string, string>>({});
-
   if (!activeSession) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -43,9 +40,6 @@ export default function SessionBuilderScreen() {
     );
   }
 
-  const getVariant = (exercise: string, defaultVariant: string) =>
-    editingVariants[exercise] ?? defaultVariant;
-
   const handleStart = () => {
     startSession();
     router.push('/active-session');
@@ -53,7 +47,6 @@ export default function SessionBuilderScreen() {
 
   const handleShuffle = () => {
     buildNewSession();
-    setEditingVariants({});
   };
 
   const axialNote = activeSession.axialNote;
@@ -110,9 +103,8 @@ export default function SessionBuilderScreen() {
         <View style={styles.exerciseList}>
           {activeSession.exercises.map((ex, idx) => {
             const colour = categoryColour(ex.movementCategory);
-            const variant = getVariant(ex.exercise, ex.variant);
-            const allVariants = exerciseLibrary[ex.exercise]?.variants ?? [variant];
             const axialCost = exerciseLibrary[ex.exercise]?.axialCost ?? 'low';
+            const variantCount = exerciseLibrary[ex.exercise]?.variants?.length ?? 1;
 
             return (
               <View key={ex.exercise} style={[styles.exCard, { borderLeftColor: colour }]}>
@@ -129,65 +121,39 @@ export default function SessionBuilderScreen() {
                       </Text>
                     </View>
                   </View>
-                  {axialCost !== 'low' && (
-                    <View style={[
-                      styles.axialPill,
-                      { backgroundColor: axialCost === 'high' ? COLOURS.danger + '33' : COLOURS.gradeC + '33' },
-                    ]}>
-                      <Text style={[
-                        styles.axialPillText,
-                        { color: axialCost === 'high' ? COLOURS.danger : COLOURS.gradeC },
+                  <View style={styles.pillRow}>
+                    {axialCost !== 'low' && (
+                      <View style={[
+                        styles.axialPill,
+                        { backgroundColor: axialCost === 'high' ? COLOURS.danger + '33' : COLOURS.gradeC + '33' },
                       ]}>
-                        {axialCost} load
-                      </Text>
-                    </View>
-                  )}
+                        <Text style={[
+                          styles.axialPillText,
+                          { color: axialCost === 'high' ? COLOURS.danger : COLOURS.gradeC },
+                        ]}>
+                          {axialCost} load
+                        </Text>
+                      </View>
+                    )}
+                    {variantCount > 1 && (
+                      <View style={styles.variantPill}>
+                        <Text style={styles.variantPillText}>{ex.variant}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-
-                {/* Variant chip row — only shown when there are multiple variants */}
-                {allVariants.length > 1 && (
-                  <>
-                    <Text style={styles.fieldLabel}>VARIATION</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.chipRow}
-                    >
-                      {allVariants.map((v) => (
-                        <TouchableOpacity
-                          key={v}
-                          onPress={() =>
-                            setEditingVariants((prev) => ({ ...prev, [ex.exercise]: v }))
-                          }
-                          style={[
-                            styles.chip,
-                            variant === v
-                              ? { backgroundColor: colour, borderColor: colour }
-                              : { borderColor: COLOURS.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.chipText,
-                              { color: variant === v ? '#000' : COLOURS.textSecondary },
-                            ]}
-                          >
-                            {v}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </>
-                )}
               </View>
             );
           })}
         </View>
 
-        {/* Sets hint */}
-        <Text style={styles.setsHint}>
-          You'll choose sets for each exercise once the session starts.
-        </Text>
+        {/* Hint row */}
+        <View style={styles.hintRow}>
+          <Text style={styles.hintIcon}>↕</Text>
+          <Text style={styles.hintText}>
+            You can swap variations and adjust sets for each exercise once the session starts.
+          </Text>
+        </View>
 
         {/* Start button */}
         <TouchableOpacity
@@ -288,7 +254,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     borderLeftWidth: 3,
     padding: SPACING.md,
-    gap: SPACING.sm,
   },
   exHeader: {
     flexDirection: 'row',
@@ -318,6 +283,11 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
     marginTop: 2,
   },
+  pillRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: SPACING.xs,
+  },
   axialPill: {
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.sm,
@@ -325,34 +295,38 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   axialPillText: { fontSize: FONT.xs, fontWeight: '700' },
-
-  fieldLabel: {
-    color: COLOURS.textMuted,
-    fontSize: FONT.xs,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginTop: SPACING.xs,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: SPACING.xs,
-    paddingRight: SPACING.md,
-    marginTop: SPACING.xs,
-  },
-  chip: {
-    borderWidth: 1,
+  variantPill: {
     borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    backgroundColor: COLOURS.surfaceHigh,
   },
-  chipText: { fontSize: FONT.sm, fontWeight: '600' },
+  variantPillText: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.xs,
+    fontWeight: '600',
+  },
 
-  setsHint: {
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: COLOURS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  hintIcon: {
+    color: COLOURS.textMuted,
+    fontSize: FONT.md,
+    fontWeight: '700',
+  },
+  hintText: {
+    flex: 1,
     color: COLOURS.textMuted,
     fontSize: FONT.sm,
-    textAlign: 'center',
-    marginBottom: SPACING.lg,
     fontStyle: 'italic',
+    lineHeight: FONT.sm * 1.5,
   },
 
   startBtn: {
