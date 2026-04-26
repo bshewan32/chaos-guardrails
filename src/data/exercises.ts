@@ -128,11 +128,9 @@ export const MAJOR_LIFTS: Record<string, MuscleGroup[]> = {
   'Deadlift (Moderate)':  ['glutes', 'hamstrings', 'upperBack'],
   'Squat (Barbell)':      ['quads', 'glutes'],
   'Squat (Spine-Friendly)': ['quads', 'glutes'],
-  'Leg Press':            ['quads', 'glutes'],
   'Row (Bent-Over)':      ['upperBack', 'lats'],
   'Row (Supported)':      ['upperBack', 'lats'],
   'Bench Press':          ['chest', 'triceps'],
-  'Chest Press (Machine)': ['chest', 'triceps'],
 };
 
 // ── Movement category metadata (UI use) ──────────────────────────────────
@@ -351,31 +349,7 @@ export const exerciseLibrary: Record<string, ExerciseData> = {
     priorityMultiplier: pm('squat', 'spineFriendly'), // 0.600
     axialCost: 'low',
     erectorCost: 'low',
-    variants: ['Goblet Squat', 'Belt Squat', 'Zercher Squat'],
-  },
-
-  'Leg Press': {
-    muscles: { quads: 1, glutes: 0.6, hamstrings: 0.3 },
-    category: 'compound',
-    movementCategory: 'squat',
-    bucket: 'squat',
-    subTier: 'spineFriendlySquat',
-    priorityMultiplier: pm('squat', 'spineFriendly'), // 0.600
-    axialCost: 'low',
-    erectorCost: 'low',
-    variants: ['Leg Press (Standard)', 'Leg Press (High Foot)', 'Leg Press (Narrow Stance)', 'Single-Leg Press'],
-  },
-
-  'Hack Squat (Machine)': {
-    muscles: { quads: 1, glutes: 0.4, core: 0.2 },
-    category: 'compound',
-    movementCategory: 'squat',
-    bucket: 'squat',
-    subTier: 'spineFriendlySquat',
-    priorityMultiplier: pm('squat', 'spineFriendly'), // 0.600
-    axialCost: 'low',
-    erectorCost: 'low',
-    variants: ['Hack Squat (Machine)', 'Hack Squat (Narrow Stance)', 'Hack Squat (Pause)'],
+    variants: ['Goblet Squat', 'Hack Squat', 'Leg Press', 'Belt Squat'],
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -505,19 +479,8 @@ export const exerciseLibrary: Record<string, ExerciseData> = {
       'Decline Barbell Bench',
       'Dumbbell Bench Press',
       'Incline Dumbbell Press',
+      'Chest Press (Machine)',
     ],
-  },
-
-  'Chest Press (Machine)': {
-    muscles: { chest: 1, triceps: 0.4, shoulders: 0.2 },
-    category: 'compound',
-    movementCategory: 'press',
-    bucket: 'press',
-    subTier: 'horizontalPress',
-    priorityMultiplier: pm('press', 'horizontal'), // 0.333
-    axialCost: 'low',
-    erectorCost: 'low',
-    variants: ['Chest Press (Machine)', 'Incline Chest Press (Machine)', 'Decline Chest Press (Machine)', 'Cable Chest Press'],
   },
 
   'Push-Up Variations': {
@@ -564,6 +527,7 @@ export const exerciseLibrary: Record<string, ExerciseData> = {
       'Seated Dumbbell Press',
       'Arnold Press',
       'Push Press',
+      'Shoulder Press (Machine)',
     ],
   },
 
