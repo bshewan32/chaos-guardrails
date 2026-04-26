@@ -14,7 +14,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.chaosguardrails.app",
-      "scheme": "chaoswithguardrails"
+      "scheme": "chaoswithguardrails",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -42,6 +45,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2dad5f31-b7ef-44ce-8410-cd0b8d3780c2"
+      }
     }
   }
 }
