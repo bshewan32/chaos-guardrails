@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,10 @@ import { useRouter, Redirect } from 'expo-router';
 import { useWorkoutStore } from '../src/store/workoutStore';
 import { COLOURS, FONT, RADIUS, SPACING, categoryColour, gradeAccent } from '../src/theme';
 import { NudgeCard } from '../src/components/NudgeCard';
+import { ConfettiBurst } from '../src/components/ConfettiBurst';
 import { exerciseLibrary } from '../src/data/exercises';
 import { FinishWeekPayload } from '../src/engine/finishWeek';
+import * as Haptics from 'expo-haptics';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Self-contained FinishWeekCard
@@ -262,6 +264,18 @@ export default function ActiveSessionScreen() {
 
   const [localSets, setLocalSets] = useState<Record<string, number>>({});
   const [localVariants, setLocalVariants] = useState<Record<string, string>>({});
+  const [confetti, setConfetti] = useState<{ visible: boolean; intensity: 'small' | 'large' }>(
+    { visible: false, intensity: 'small' },
+  );
+
+  const triggerCelebration = useCallback((intensity: 'small' | 'large') => {
+    if (intensity === 'large') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setConfetti({ visible: true, intensity });
+  }, []);
 
   if (!activeSession) {
     return <Redirect href="/(tabs)" />;
@@ -279,6 +293,13 @@ export default function ActiveSessionScreen() {
 
   const handleLog = (exercise: string, variant: string, sets: number) => {
     logWorkout(exercise, variant, sets);
+    // Determine if this log completes the session
+    const willComplete =
+      activeSession &&
+      activeSession.exercises
+        .filter((e) => e.exercise !== exercise)
+        .every((e) => !!sessionProgress[e.exercise]);
+    triggerCelebration(willComplete ? 'large' : 'small');
   };
 
   const handleEndSession = () => {
@@ -305,6 +326,12 @@ export default function ActiveSessionScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Confetti overlay — sits above everything, pointer-events none */}
+      <ConfettiBurst
+        visible={confetti.visible}
+        intensity={confetti.intensity}
+        onDone={() => setConfetti((c) => ({ ...c, visible: false }))}
+      />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}

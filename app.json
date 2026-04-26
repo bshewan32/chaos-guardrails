@@ -2,14 +2,14 @@
   "expo": {
     "name": "Chaos with Guardrails",
     "slug": "chaos-guardrails",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F0F14"
+      "backgroundColor": "#F2F2F7"
     },
     "ios": {
       "supportsTablet": false,

@@ -1,37 +1,42 @@
 import { GradeLetter } from '../engine/grades';
 import { MovementCategory } from '../data/exercises';
 
-// ── Base palette ──────────────────────────────────────────────────────────────
+// ── Base palette — light mode ─────────────────────────────────────────────────
 export const COLOURS = {
-  base: '#0F0F14',
-  surface: '#1A1A24',
-  surfaceHigh: '#252535',
-  border: '#2E2E42',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#8E8E93',
-  textMuted: '#4A4A5A',
+  // Backgrounds
+  base: '#F2F2F7',          // iOS system grouped background (light grey)
+  surface: '#FFFFFF',       // Card / sheet surface
+  surfaceHigh: '#F0F0F5',   // Elevated surface (chips, badges)
+  border: '#D1D1D6',        // Subtle separator
+
+  // Text
+  textPrimary: '#1C1C1E',   // Near-black
+  textSecondary: '#48484A', // Dark grey
+  textMuted: '#8E8E93',     // Muted grey
+
+  // Semantic
   danger: '#C0392B',
 
-  // Grade-driven accent
+  // Grade-driven accents (kept vibrant for contrast on light bg)
   gradeD: '#C0392B',
   gradeC: '#E67E22',
-  gradeB: '#F1C40F',
+  gradeB: '#D4A017',        // Slightly deeper gold for light bg readability
   gradeA: '#27AE60',
-  gradeS: '#00BFA5',
+  gradeS: '#00897B',        // Slightly deeper teal for light bg readability
 
-  // Movement categories
-  pull: '#4ECDC4',
-  squat: '#A29BFE',
-  press: '#FF6B6B',
-  posterior: '#FDCB6E',
-  accessory: '#8E8E93',
+  // Movement categories (slightly deeper for light bg contrast)
+  pull: '#00897B',          // Teal
+  squat: '#7C6FCD',         // Purple
+  press: '#E05555',         // Red
+  posterior: '#D4A017',     // Gold
+  accessory: '#8E8E93',     // Grey
 
   // Progress ring states
-  ringEmpty: '#2E2E42',
-  ringLow: '#C0392B',     // < 50%
-  ringMid: '#E67E22',     // 50–75%
-  ringHigh: '#F1C40F',    // 75–100%
-  ringDone: '#27AE60',    // 100%
+  ringEmpty: '#D1D1D6',
+  ringLow: '#C0392B',
+  ringMid: '#E67E22',
+  ringHigh: '#D4A017',
+  ringDone: '#27AE60',
 } as const;
 
 export function gradeAccent(grade: GradeLetter): string {
