@@ -42,6 +42,7 @@ export interface WorkoutStore {
   unlockedAchievements: Partial<Record<AchievementKey, boolean>>;
   personalBests: PersonalBests;
   hasOnboarded: boolean;
+  favouriteExercises: string[]; // exercise names the user has starred
 
   // ── Session state (not persisted) ─────────────────────────────────────────
   activeSession: BuiltSession | null;
@@ -65,6 +66,7 @@ export interface WorkoutStore {
   // ── Actions ───────────────────────────────────────────────────────────────
   setWeekTarget: (target: number) => void;
   setHasOnboarded: (v: boolean) => void;
+  toggleFavouriteExercise: (exercise: string) => void;
   buildNewSession: () => void;
   startSession: () => void;
   clearSession: () => void;
@@ -91,6 +93,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
       unlockedAchievements: {},
       personalBests: {},
       hasOnboarded: false,
+      favouriteExercises: [],
 
       // ── Session state ─────────────────────────────────────────────────────
       activeSession: null,
@@ -116,8 +119,8 @@ export const useWorkoutStore = create<WorkoutStore>()(
       },
 
       getSmartRecs: () => {
-        const { workoutHistory, weekTarget } = get();
-        return getSmartRecommendations(workoutHistory, getWeekStart(new Date()), weekTarget);
+        const { workoutHistory, weekTarget, favouriteExercises } = get();
+        return getSmartRecommendations(workoutHistory, getWeekStart(new Date()), weekTarget, favouriteExercises);
       },
 
       getWeekGrade: () => {
@@ -146,13 +149,24 @@ export const useWorkoutStore = create<WorkoutStore>()(
 
       setHasOnboarded: (v) => set({ hasOnboarded: v }),
 
+      toggleFavouriteExercise: (exercise) => {
+        const { favouriteExercises } = get();
+        const isFav = favouriteExercises.includes(exercise);
+        set({
+          favouriteExercises: isFav
+            ? favouriteExercises.filter((e) => e !== exercise)
+            : [...favouriteExercises, exercise],
+        });
+      },
+
       buildNewSession: () => {
-        const { workoutHistory, weekTarget, lastUsedVariantsByExercise } = get();
+        const { workoutHistory, weekTarget, lastUsedVariantsByExercise, favouriteExercises } = get();
         const session = buildSession(
           workoutHistory,
           getWeekStart(new Date()),
           weekTarget,
           lastUsedVariantsByExercise,
+          favouriteExercises,
         );
         set({
           activeSession: session,
@@ -315,6 +329,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
         unlockedAchievements: state.unlockedAchievements,
         personalBests: state.personalBests,
         hasOnboarded: state.hasOnboarded,
+        favouriteExercises: state.favouriteExercises,
       }),
     },
   ),

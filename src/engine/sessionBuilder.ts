@@ -385,7 +385,7 @@ export function buildSession(
 
   // ── Normal mode ──────────────────────────────────────────────────────────
   const sessionSize = getSessionSize(history, weekStart, weekTarget);
-  const recs = getSmartRecommendations(history, weekStart, weekTarget);
+  const recs = getSmartRecommendations(history, weekStart, weekTarget, favouriteExercises);
   const priorities = getMuscleGroupPriorities(history, weekStart, weekTarget);
   const doneThisWeek = getExercisesDoneThisWeek(history, weekStart);
 

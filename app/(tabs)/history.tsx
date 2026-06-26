@@ -30,8 +30,10 @@ export default function HistoryScreen() {
     weekTarget,
     personalBests,
     unlockedAchievements,
+    favouriteExercises,
     getWeeklyVolumes,
     getStats,
+    toggleFavouriteExercise,
   } = useWorkoutStore();
 
   const weeklyVolumes = getWeeklyVolumes();
@@ -175,8 +177,9 @@ export default function HistoryScreen() {
               <Text style={styles.emptyText}>No workouts logged yet</Text>
             </View>
           ) : (
-            sorted.slice(0, 10).map((w) => {
+            sorted.slice(0, 20).map((w) => {
               const d = new Date(w.date);
+              const isFav = favouriteExercises.includes(w.exercise);
               return (
                 <View key={w.id} style={styles.activityRow}>
                   <View style={styles.activityLeft}>
@@ -189,6 +192,15 @@ export default function HistoryScreen() {
                       {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </Text>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => toggleFavouriteExercise(w.exercise)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.historyStarBtn}
+                  >
+                    <Text style={[styles.historyStarIcon, isFav && styles.historyStarActive]}>
+                      {isFav ? '★' : '☆'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               );
             })
@@ -349,4 +361,15 @@ const styles = StyleSheet.create({
   activityRight: { alignItems: 'flex-end', gap: 2 },
   activitySets: { color: COLOURS.pull, fontSize: FONT.md, fontWeight: '700' },
   activityDate: { color: COLOURS.textSecondary, fontSize: FONT.xs },
+  historyStarBtn: {
+    paddingLeft: SPACING.sm,
+    alignSelf: 'center',
+  },
+  historyStarIcon: {
+    fontSize: 20,
+    color: COLOURS.textMuted,
+  },
+  historyStarActive: {
+    color: '#F4C430',
+  },
 });

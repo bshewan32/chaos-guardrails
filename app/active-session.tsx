@@ -251,12 +251,14 @@ export default function ActiveSessionScreen() {
     sessionProgress,
     nudgeSuggestions,
     finishWeekPayload,
+    favouriteExercises,
     getWeekGrade,
     logWorkout,
     logQuickFinisher,
     dismissNudge,
     dismissFinishWeek,
     clearSession,
+    toggleFavouriteExercise,
   } = useWorkoutStore();
 
   const grade = getWeekGrade();
@@ -423,7 +425,7 @@ export default function ActiveSessionScreen() {
                         {done ? '✓' : idx + 1}
                       </Text>
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={[styles.exName, done && styles.exNameDone]}>
                         {ex.exercise}
                       </Text>
@@ -432,6 +434,19 @@ export default function ActiveSessionScreen() {
                       </Text>
                     </View>
                   </View>
+                  {/* Favourite star */}
+                  <TouchableOpacity
+                    onPress={() => toggleFavouriteExercise(ex.exercise)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.starBtn}
+                  >
+                    <Text style={[
+                      styles.starIcon,
+                      favouriteExercises.includes(ex.exercise) && styles.starIconActive,
+                    ]}>
+                      {favouriteExercises.includes(ex.exercise) ? '★' : '☆'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 {!done && (
@@ -669,5 +684,16 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: FONT.sm,
     fontWeight: '800',
+  },
+  starBtn: {
+    paddingLeft: SPACING.sm,
+    alignSelf: 'flex-start',
+  },
+  starIcon: {
+    fontSize: 22,
+    color: COLOURS.textMuted,
+  },
+  starIconActive: {
+    color: '#F4C430', // gold
   },
 });

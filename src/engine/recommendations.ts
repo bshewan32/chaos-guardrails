@@ -38,10 +38,14 @@ export interface ExerciseRecommendation {
  *   - Progressive posterior penalty (0.7× at 2 sessions, 0.5× at 3+) for expensive posterior
  *   - Major lift injection if a movement category is entirely absent
  */
+/** Favourite boost — nudges preferred exercises up without overriding need. */
+const FAVOURITE_BOOST = 1.3;
+
 export function getSmartRecommendations(
   history: WorkoutEntry[],
   weekStart: Date,
   weekTarget: number,
+  favouriteExercises: string[] = [],
 ): ExerciseRecommendation[] {
   const priorities = getMuscleGroupPriorities(history, weekStart, weekTarget);
   const currentWeekVolume = calculateCurrentWeekVolume(history, weekStart);
@@ -90,6 +94,12 @@ export function getSmartRecommendations(
     const multiplier = data.priorityMultiplier ?? 0.333;
     // 95% need-driven + 5% taxonomy tiebreaker
     let score = rawScore * (0.95 + 0.05 * multiplier);
+
+    // Favourite boost — applied after all other scoring so it can never
+    // manufacture a recommendation from zero need, only elevate an existing one.
+    if (favouriteExercises.includes(exercise)) {
+      score *= FAVOURITE_BOOST;
+    }
 
     // Progressive posterior penalty for expensive posterior movements.
     // Preserved from original PWA: progressively devalues high/moderate axial
