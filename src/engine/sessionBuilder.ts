@@ -374,6 +374,7 @@ export function buildSession(
   weekStart: Date,
   weekTarget: number,
   lastUsedVariantsByExercise: Record<string, string[]>,
+  favouriteExercises: string[] = [],
 ): BuiltSession {
   // ── Overreach / complete week check ─────────────────────────────────────
   const complete = isWeekComplete(history, weekStart, weekTarget);
