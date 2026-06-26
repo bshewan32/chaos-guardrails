@@ -166,7 +166,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
           getWeekStart(new Date()),
           weekTarget,
           lastUsedVariantsByExercise,
-          favouriteExercises,
+          favouriteExercises ?? [],
         );
         set({
           activeSession: session,
@@ -322,6 +322,14 @@ export const useWorkoutStore = create<WorkoutStore>()(
     {
       name: 'chaos-guardrails-store',
       storage: createJSONStorage(() => AsyncStorage),
+      // Backfill any fields that were added after the initial install.
+      // Without this, existing users get undefined for new fields until
+      // they clear storage or reinstall.
+      onRehydrateStorage: () => (state) => {
+        if (state && !Array.isArray(state.favouriteExercises)) {
+          state.favouriteExercises = [];
+        }
+      },
       partialize: (state) => ({
         workoutHistory: state.workoutHistory,
         weekTarget: state.weekTarget,
