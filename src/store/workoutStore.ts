@@ -28,7 +28,8 @@ import {
   checkNewAchievements,
   AppStats,
 } from '../engine';
-import { MuscleGroup } from '../data/exercises';
+import { MuscleGroup, exerciseLibrary, AxialCost, ErectorCost } from '../data/exercises';
+import { Finisher, getTurboFinisher } from '../data/finishers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State shape
@@ -48,6 +49,7 @@ export interface WorkoutStore {
   activeSession: BuiltSession | null;
   sessionProgress: Record<string, boolean>; // exercise name → completed
   sessionStarted: boolean;
+  activeFinisher: Finisher | null;
 
   // ── UI state (not persisted) ──────────────────────────────────────────────
   nudgeSuggestions: NudgeSuggestion[];
@@ -70,6 +72,7 @@ export interface WorkoutStore {
   buildNewSession: () => void;
   startSession: () => void;
   clearSession: () => void;
+  generateTurboFinisher: () => void;
   logWorkout: (exercise: string, variant: string, sets: number) => void;
   dismissNudge: () => void;
   dismissFinishWeek: () => void;
@@ -99,6 +102,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
       activeSession: null,
       sessionProgress: {},
       sessionStarted: false,
+      activeFinisher: null,
 
       // ── UI state ──────────────────────────────────────────────────────────
       nudgeSuggestions: [],
@@ -172,6 +176,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
           activeSession: session,
           sessionProgress: {},
           sessionStarted: false,
+          activeFinisher: null,
           nudgeSuggestions: [],
           nudgeShownThisSession: false,
           finishWeekPayload: null,
@@ -180,11 +185,35 @@ export const useWorkoutStore = create<WorkoutStore>()(
 
       startSession: () => set({ sessionStarted: true }),
 
+      generateTurboFinisher: () => {
+        const { activeSession } = get();
+        if (!activeSession) return;
+
+        // Calculate max axial/erector cost of the current session
+        let maxAxial: AxialCost = 'low';
+        let maxErector: ErectorCost = 'low';
+
+        activeSession.exercises.forEach(ex => {
+          const data = exerciseLibrary[ex.exercise];
+          if (data) {
+            if (data.axialCost === 'high') maxAxial = 'high';
+            else if (data.axialCost === 'moderate' && maxAxial === 'low') maxAxial = 'moderate';
+
+            if (data.erectorCost === 'high') maxErector = 'high';
+            else if (data.erectorCost === 'moderate' && maxErector === 'low') maxErector = 'moderate';
+          }
+        });
+
+        const finisher = getTurboFinisher(maxAxial, maxErector);
+        set({ activeFinisher: finisher });
+      },
+
       clearSession: () =>
         set({
           activeSession: null,
           sessionProgress: {},
           sessionStarted: false,
+          activeFinisher: null,
           nudgeSuggestions: [],
           nudgeShownThisSession: false,
           finishWeekPayload: null,

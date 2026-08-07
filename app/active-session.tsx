@@ -252,6 +252,7 @@ export default function ActiveSessionScreen() {
     nudgeSuggestions,
     finishWeekPayload,
     favouriteExercises,
+    activeFinisher,
     getWeekGrade,
     logWorkout,
     logQuickFinisher,
@@ -259,6 +260,7 @@ export default function ActiveSessionScreen() {
     dismissFinishWeek,
     clearSession,
     toggleFavouriteExercise,
+    generateTurboFinisher,
   } = useWorkoutStore();
 
   const grade = getWeekGrade();
@@ -387,6 +389,30 @@ export default function ActiveSessionScreen() {
             onLog={logQuickFinisher}
             onDismiss={dismissFinishWeek}
           />
+        )}
+
+        {/* Turbo Mode Section */}
+        {allDone && !activeFinisher && (
+          <TouchableOpacity
+            style={styles.turboBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              generateTurboFinisher();
+            }}
+          >
+            <Text style={styles.turboBtnText}>🔥 Feeling strong? Try Turbo Mode</Text>
+          </TouchableOpacity>
+        )}
+
+        {activeFinisher && (
+          <View style={[styles.finisherCard, { borderColor: categoryColour(activeFinisher.movementCategory) }]}>
+            <View style={styles.finisherHeader}>
+              <Text style={styles.finisherTitle}>🔥 Turbo Mode: {activeFinisher.name}</Text>
+            </View>
+            <View style={styles.finisherBody}>
+              <Text style={styles.finisherDesc}>{activeFinisher.description}</Text>
+            </View>
+          </View>
         )}
 
         {/* Exercise cards */}
@@ -695,5 +721,46 @@ const styles = StyleSheet.create({
   },
   starIconActive: {
     color: '#F4C430', // gold
+  },
+  turboBtn: {
+    backgroundColor: COLOURS.surfaceHigh,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    borderStyle: 'dashed',
+  },
+  turboBtnText: {
+    color: COLOURS.textPrimary,
+    fontSize: FONT.md,
+    fontWeight: '700',
+  },
+  finisherCard: {
+    backgroundColor: COLOURS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+  },
+  finisherHeader: {
+    backgroundColor: COLOURS.surfaceHigh,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLOURS.border,
+  },
+  finisherTitle: {
+    color: COLOURS.textPrimary,
+    fontSize: FONT.md,
+    fontWeight: '800',
+  },
+  finisherBody: {
+    padding: SPACING.md,
+  },
+  finisherDesc: {
+    color: COLOURS.textSecondary,
+    fontSize: FONT.sm,
+    lineHeight: FONT.sm * 1.4,
   },
 });
