@@ -7,6 +7,14 @@ import {
 } from '../data/exercises';
 import { WorkoutEntry, calculateCurrentWeekVolume, getWorkoutsForWeek } from './volume';
 import { getMuscleGroupPriorities, MusclePriority } from './priority';
+import {
+  ENABLE_EXPERIMENTAL_BALANCE,
+  getMovementSetTotals,
+  hasOverheadPressInRecentSessions,
+  OVERHEAD_PRESS_CADENCE_BOOST,
+  PRESS_BALANCE_SCORE_DAMPENING,
+  PULL_BALANCE_SCORE_BOOST,
+} from './recommendationExperiment';
 
 export interface ExerciseRecommendation {
   exercise: string;
@@ -50,6 +58,10 @@ export function getSmartRecommendations(
   const priorities = getMuscleGroupPriorities(history, weekStart, weekTarget);
   const currentWeekVolume = calculateCurrentWeekVolume(history, weekStart);
   const thisWeekWorkouts = getWorkoutsForWeek(history, weekStart);
+  const movementSetTotals = getMovementSetTotals(thisWeekWorkouts);
+  const pullSetsBehindPress = movementSetTotals.pull < movementSetTotals.press;
+  const overheadPressNeedsCadence =
+    ENABLE_EXPERIMENTAL_BALANCE && !hasOverheadPressInRecentSessions(history, 2);
 
   const topNeeds: MusclePriority[] = priorities
     .filter((p) => p.isPrimary && p.remaining > 0)
@@ -92,8 +104,29 @@ export function getSmartRecommendations(
     // tiebreaker within the same need-level, not as a structural pre-filter.
     // This matches the original PWA philosophy: "what best hits current needs?"
     const multiplier = data.priorityMultiplier ?? 0.333;
+    const cat = data.movementCategory;
     // 95% need-driven + 5% taxonomy tiebreaker
     let score = rawScore * (0.95 + 0.05 * multiplier);
+
+    // EXPERIMENT (rollback: set ENABLE_EXPERIMENTAL_BALANCE=false):
+    // keep need as the dominant signal, but gently repair a pull deficit by
+    // sets. This does not force a pull or suppress a press; it only changes
+    // close calls in the sorted recommendation list.
+    if (ENABLE_EXPERIMENTAL_BALANCE && pullSetsBehindPress) {
+      if (cat === 'pull') score *= PULL_BALANCE_SCORE_BOOST;
+      if (cat === 'press') score *= PRESS_BALANCE_SCORE_DAMPENING;
+    }
+
+    // EXPERIMENT (rollback: set ENABLE_EXPERIMENTAL_BALANCE=false):
+    // overhead press is still need-driven and still subject to axial budgets,
+    // but gets a modest cadence nudge after two sessions without it.
+    if (
+      ENABLE_EXPERIMENTAL_BALANCE &&
+      exercise === 'Overhead Press' &&
+      overheadPressNeedsCadence
+    ) {
+      score *= OVERHEAD_PRESS_CADENCE_BOOST;
+    }
 
     // Favourite boost — applied after all other scoring so it can never
     // manufacture a recommendation from zero need, only elevate an existing one.
@@ -105,7 +138,6 @@ export function getSmartRecommendations(
     // Preserved from original PWA: progressively devalues high/moderate axial
     // posterior work based on how many posterior sessions have already happened
     // this week. Does NOT ban posterior — just reduces its score.
-    const cat = data.movementCategory;
     if (cat === 'posterior') {
       const n = recentSessions['posterior'] || 0;
       const expensive =

@@ -8,6 +8,10 @@ import { WorkoutEntry, getWorkoutsForWeek, calculateCurrentWeekVolume } from './
 import { getMuscleGroupPriorities } from './priority';
 import { getSmartRecommendations, ExerciseRecommendation } from './recommendations';
 import { selectVariant } from './variantSelector';
+import {
+  ENABLE_EXPERIMENTAL_BALANCE,
+  hasOverheadPressInRecentSessions,
+} from './recommendationExperiment';
 
 // ── Session builder constants ─────────────────────────────────────────────
 // Hard limits matching the original PWA philosophy.
@@ -423,17 +427,42 @@ export function buildSession(
   const shuffledPool = shuffle(topPool.slice(0, sessionSize + 5));
 
   // ── Pass 1: one exercise per movement category from the shuffled pool ────
-  const categoryOrder: MovementCategory[] = ['posterior', 'squat', 'pull', 'press'];
+  // EXPERIMENT (rollback: set ENABLE_EXPERIMENTAL_BALANCE=false):
+  // The proven order is posterior → squat → pull → press. For shorter sessions
+  // the experiment puts pull and press ahead of the second lower-body category
+  // so a 3-exercise session does not silently omit pressing.
+  const categoryOrder: MovementCategory[] = ENABLE_EXPERIMENTAL_BALANCE && sessionSize <= 3
+    ? ['posterior', 'pull', 'press', 'squat']
+    : ['posterior', 'squat', 'pull', 'press'];
 
   for (const cat of categoryOrder) {
     if (chosen.length >= sessionSize) break;
 
     // Find the top-scored rec in this category from the shuffled pool
-    const topRec = shuffledPool.find(
+    let topRec = shuffledPool.find(
       (r) =>
         r.movementCategory === cat &&
         !chosen.some((c) => c.exercise === r.exercise),
     );
+
+    // EXPERIMENT (rollback: set ENABLE_EXPERIMENTAL_BALANCE=false):
+    // If overhead press has been absent for the last two sessions, prefer it
+    // for the press slot when it is already a valid need-driven candidate and
+    // fits the existing axial budget. This is a cadence nudge, not a force.
+    if (
+      ENABLE_EXPERIMENTAL_BALANCE &&
+      cat === 'press' &&
+      !hasOverheadPressInRecentSessions(history, 2)
+    ) {
+      const overheadPress = recs.find(
+        (r) =>
+          r.exercise === 'Overhead Press' &&
+          !doneThisWeek.has(r.exercise) &&
+          !chosen.some((c) => c.exercise === r.exercise) &&
+          canAfford(r.exercise, budget),
+      );
+      if (overheadPress) topRec = overheadPress;
+    }
 
     if (!topRec) {
       // Category not in top pool — fall back to full rec list
